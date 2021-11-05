@@ -1,0 +1,233 @@
+```{r}
+library(tidyverse)
+library(data.table)
+library(broom)
+in_gwas <- fread("~/data/data/projects/ageofonset/gwas_phenotypes/ageofonset_broad_rint.PHENO") %>%  rename(f.eid = V2) %>% tibble() #  age at symptoms
+
+in_gwas2 <- fread("~/data/data/projects/ageofonset/gwas_phenotypes/ageofonset_nurse_rint.PHENO") %>%  rename(f.eid = V2) %>% tibble()  # age at diagnosis
+
+aao_prs <- read_tsv("data/ignore/prs/AAO_META_QC.ma.sscore") %>% # prs based only on GWAS from age at symptoms
+  mutate(aao_score = scale(SCORE1_AVG)) %>%
+  select(f.eid = 1, aao_score)
+
+prs <- read_tsv("/home/arvhar/data/data/sbayesr/UKB_SCORES/joined_pgs.tsv") %>% # PRS for MDD,BIP, SCZ 
+  left_join(., aao_prs, by = "f.eid")
+
+extended_baseline <- fread("/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/UKB_RAW_DATA/ukb_data/UKB_20126.tsv") %>% tibble()
+excl <- read_tsv("exclusion_criteria_broad.tsv")
+
+load("data/ignore/subtype_all.Rda")
+prob_bip <- extended_baseline %>% filter(f.20126.0.0 %in% c(1,2))
+controls <- subtype_all %>% tibble() %>% select(f.eid = eid, control = control_md) %>% 
+  anti_join(.,prob_bip, by = "f.eid")
+
+new_prs_pop <- read_tsv("prs_outcomes.tsv")
+
+
+
+# Define the mild, moderate and severe MD conditions
+probable_depression <- extended_baseline  %>% 
+  mutate( 
+    mild_md = case_when(f.20126.0.0 == 5 ~1),
+    moderate_md = case_when(f.20126.0.0 == 4 ~1),
+    severe_md = case_when(f.20126.0.0 == 3 ~1)
+  ) %>% select(f.eid, mild_md, moderate_md,severe_md) %>% 
+  anti_join(.,in_gwas, by = "f.eid") %>%
+  anti_join(.,in_gwas2, by = "f.eid")
+
+# Join all the definitions together.
+# Merge schizophrenia/bipolar with self-reported medication to get
+# Probable schizophrenia and Probable bipolar
+prs_phenotypes <- 
+  excl %>% 
+  full_join(., probable_depression, by = "f.eid") %>% 
+  mutate(
+    probable_schizophrenia = case_when(antipsychotics == 1 ~ 1, schizophrenia == 1 ~ 1),
+    probable_bipolar = case_when(lithium == 1 ~ 1, bipolar == 1 ~ 1)) %>% 
+  inner_join(., prs, by = "f.eid") %>% 
+  full_join(controls, ., by = "f.eid") %>% 
+  anti_join(.,in_gwas, by = "f.eid") %>%
+  anti_join(.,in_gwas2, by = "f.eid") %>% 
+  filter(in.kinship.table == 0) %>% 
+  filter(non_eur == 0)
+
+# Use the control variable to define control status for each outcome
+prs_data <- prs_phenotypes %>% 
+  mutate(across(c(prob_bip_1, prob_bip_2, probable_schizophrenia, probable_bipolar, mild_md,moderate_md, severe_md), ~case_when(.x == 1 ~ 1, control == 1 ~ 0)))
+
+
+nco <- 
+  prs_data %>% # Count the number of controls for each outcome
+  select(c(prob_bip_1, prob_bip_2, probable_schizophrenia, probable_bipolar, mild_md,moderate_md, severe_md)) %>% 
+  map_df(~. == 0) %>%
+  map_df(sum, na.rm = T) %>%
+  pivot_longer(everything(), values_to = "n_controls", names_to = "outcome")
+
+
+nca <- prs_data %>% # Count the number of cases for each outcome
+  select(c(prob_bip_1, prob_bip_2, probable_schizophrenia, probable_bipolar, mild_md,moderate_md, severe_md)) %>% 
+  map_df(sum, na.rm =T) %>% 
+  pivot_longer(everything(), values_to = "n_cases", names_to = "outcome")
+
+count_cases_controls <- inner_join(nca,nco, by = "outcome")
+# write_tsv(count_cases_controls, "results/table_of_cases_and_controls_psych_outcomes.tsv")
+
+predict_with_prs <- function(dependant, predictor,data, binary=FALSE){
+  if(binary){
+    data <- data %>% 
+      filter(.data[[dependant]] == 0 | .data[[dependant]] == 1)
+  }
+  
+  
+  predictors <- data %>% 
+    select(all_of(predictor), starts_with("PC"))
+  
+  dependant_var <- data %>% 
+    select(dependant)
+  
+  if (binary) {
+    predictors %>% 
+      glm(dependant_var[[1]] ~ ., data = ., family = "binomial") %>% 
+      tidy(., conf.int = T, exponentiate = T) %>% 
+      filter(term %in% predictor) %>% 
+      mutate(across(c(estimate,conf.low, conf.high), ~1/.x)) %>%  # Flip odds-ratios
+      add_column(phenotype = dependant)
+    
+  } else {
+    predictors %>% 
+      lm(dependant_var[[1]] ~ ., data = .) %>% 
+      tidy(exponentiate = T, conf.int = T) %>% 
+      filter(term %in% predictor) %>% 
+      mutate(across(c(estimate,conf.low, conf.high), ~1/.x)) %>%  # Flip odds-ratios
+      add_column(phenotype = dependant)
+    
+  }
+}
+
+# These are the dependant variables to predict 
+colnames <- prs_data %>% select(prob_bip_1, prob_bip_2,probable_bipolar, probable_schizophrenia, mild_md, moderate_md, severe_md) %>% colnames()
+
+# This take some time to run - because of confidence intervals
+# Without adjusting for MDD prs
+no_adjust <-  colnames %>% 
+  map(predict_with_prs, data = prs_data, predictor = "aao_score", binary = T) %>% 
+  reduce(bind_rows) %>% add_column(adjust = 0) %>% 
+  mutate(across(c(estimate,conf.low, conf.high), ~1/.x)) # Flip odds-ratios
+
+
+# With MDD-prs as covariate
+adjust <- colnames %>% 
+  map(predict_with_prs, data = prs_data, predictor = c("aao_score", "mdd_no23noUKB_2018"), binary = T) %>% 
+  reduce(bind_rows) %>% add_column(adjust = 1) %>% filter(term != "mdd_no23noUKB_2018")
+
+no_adjust <- no_adjust
+  
+adjust <- adjust
+
+# Save the results
+bind_rows(no_adjust, adjust) %>%
+  rename(conf.low = conf.high, conf.high = conf.low) %>% 
+  write_tsv(., "results/logistic_regression_of_psych_outcomes.tsv")
+
+bind_rows(no_adjust, adjust) %>% 
+  filter(phenotype %in% c("prob_bip_1", "prob_bip_2")) %>% select(estimate, p.value, phenotype)
+
+```
+
+# Predicting age at onset with PRS based on MDD, SCZ, BIP.
+```{R}
+library(tidyverse)
+library(broom)
+library(data.table)
+
+prs <- fread("/home/arvhar/data/data/sbayesr/UKB_SCORES/joined_pgs.tsv") %>% tibble() 
+load("data/ignore/subtype_all.Rda")
+ppd_cases <- subtype_all %>% 
+  filter(ppd == 1 | ppd_cidi == 1) %>%
+  select(f.eid = eid) %>% tibble()
+
+
+
+age_at_symptoms <- read_tsv("data/ignore/phenotypes/age_at_symptoms_broad.tsv") %>% tibble()
+age_at_diagnosis <- read_tsv("data/ignore/phenotypes/age_at_diagnosis.tsv") %>% tibble()
+
+mhq_relatednes <- read_tsv("data/ignore/relatedness/exclude_mhq") %>% rename(f.eid =1)
+nurse_relatedness <- read_tsv("data/ignore/relatedness/exclude_nurse") %>% rename(f.eid =1)
+
+
+# Exclude relatedness
+data_symptoms <- age_at_symptoms %>% 
+  rename(aao_mhq = aao) %>% 
+  anti_join(., mhq_relatednes)
+
+data_diagnosis <- age_at_diagnosis %>% 
+  rename(aao_nurse = age_at_diagnosis) %>% 
+  anti_join(., nurse_relatedness)
+
+data_w_ppd <- prs %>% 
+  left_join(., data_diagnosis) %>% 
+  left_join(., data_symptoms) 
+
+
+prs_predict <- function(predictor,tbl){
+
+  age_at_symptoms <- tbl %>% 
+    filter(!is.na(aao_mhq)) %>% 
+    select(aao_mhq, all_of(predictor)) %>% 
+    lm(aao_mhq ~ . , data = .) %>% tidy(conf.int = T) %>% filter(term != "(Intercept)") %>% 
+    add_column(sample = "Age at symptoms")
+  
+  age_at_diagnosis <- tbl %>% 
+    filter(!is.na(aao_nurse)) %>% 
+    select(aao_nurse, all_of(predictor)) %>% 
+    lm(aao_nurse ~ . , data = .) %>% tidy(conf.int = T) %>% filter(term != "(Intercept)") %>% 
+    add_column(sample = "Age at diagnosis")
+  bind_rows(age_at_diagnosis, age_at_symptoms)
+}
+
+prs_w_ppd <- 
+  prs %>% select(bip2021,mdd_no23noUKB_2018, scz2021) %>% colnames() %>% 
+  map(prs_predict, tbl = data_w_ppd) %>% 
+  reduce(bind_rows)%>% add_column(ppd_included = 1)
+
+# Now without PPD cases
+
+data_no_ppd <- data_w_ppd %>% 
+  anti_join(., ppd_cases)
+  
+prs_no_ppd <- #These are the predictors that are iterated over
+  prs %>% select(bip2021,mdd_no23noUKB_2018, scz2021 ) %>% colnames() %>% 
+  map(prs_predict, tbl = data_no_ppd) %>% 
+  reduce(bind_rows) %>% add_column(ppd_included = 0)
+
+final <- bind_rows(prs_no_ppd, prs_w_ppd)
+write_tsv(final, "results/linear_regression_on_age_at_onset.tsv")
+```
+
+
+# PRS-age at sypmtoms association with age at diagnosis
+```{r}
+library(tidyverse)
+library(broom)
+library(data.table)
+
+aao_score <- read_tsv("data/ignore/prs/ageofonset_broad_MHQ_forPRS_QC.ma.sscore") %>% 
+  mutate(f.eid = IID, aao_mhq = scale(SCORE1_AVG)) %>% 
+  select(f.eid,aao_mhq) # PRS from onnly MHQ GWAS
+
+prs <- read_tsv("/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/sbayesr/UKB_SCORES/joined_pgs.tsv") %>% 
+  inner_join(.,aao_score, by = "f.eid") # PRS covariates
+
+
+in_gwas2 <- fread("data/ignore/phenotypes/gwas/age_at_symptoms_broad") %>%  rename(f.eid = V2) # GWAS age at symptoms
+
+age_at_diagnosis <- read_tsv("data/ignore/phenotypes/age_at_diagnosis.tsv")
+
+
+age_at_diagnosis %>% 
+  inner_join(., prs, by = "f.eid") %>% 
+  anti_join(., in_gwas2, by = "f.eid") %>% # Remove overlap with GWAS
+  filter(in.kinship.table == 0) %>% # Remove relatedness
+  lm(age_at_diagnosis ~ aao_mhq  + PC1 + PC2 + PC3 + PC4 + PC5 +PC6 + PC7 + PC8 + PC9 + PC10, data = .) %>% summary()
+  tidy(conf.int = T)
+```

@@ -1,0 +1,14 @@
+rg	se	p	base	other
+-0.5102687741376084	0.06200136117077091	1.872746638120043e-16	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	Autism_RIPKE_2017.hdl.rds
+-0.33414436086587657	0.04744930504323933	1.8931772236386625e-12	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	pgc-bip2.hdl.rds
+-0.3997987908113747	0.046484978659297876	7.929917805050737e-18	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	PGC-wave3_SCZ.tsv.hdl.rds
+-0.43574690565717467	0.03933033470065191	1.583586188537246e-28	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	scz20_eur_hdl.ma.hdl.rds
+-0.40070960668922906	0.04706758118481171	1.687680973405341e-17	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	scz20_mixed_hdl.ma.hdl.rds
+-0.33822113377165974	0.041849304895581675	6.37749272892538e-16	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	bipolar_2018.hdl.rds
+-0.36306251296126124	0.062420208251741105	6.011919161364803e-9	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	depressive_symptoms.hdl.rds
+-0.5185326891775434	0.04312190896664603	2.6319822965084372e-33	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	EA_hdl.ma.hdl.rds
+-0.10925423929479194	0.059358626719292526	0.06568328370882966	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	hp2adhd.00.tsv.hdl.rds
+-0.3810782267149314	0.06514241357431075	4.917950355322784e-9	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	hp2an.00.tsv.hdl.rds
+-0.35732894356665224	0.04483415210126619	1.5865285373189024e-15	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	iq_hdl.ma.hdl.rds
+-0.49092020494291877	0.042001735547010186	1.4664175688667736e-31	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	mdd_howard_2019.hdl.rds
+-0.24113827002919444	0.03460522630425368	3.2088112782327065e-12	/proj/sens2017519/nobackup/b2016326_nobackup/private/arvhar/data/ageofonset/results/gwas/new/for_hdl/munged/AAO_META.hdl.rds	neuro_hdl.ma.hdl.rds

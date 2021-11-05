@@ -1,0 +1,25 @@
+# QC cohort
+The QC cohort is a combination of three filters:
+1) genetic qc:ed data
+2) of european ancestry
+3) has not withdrawn consent
+```{r}
+library(tidyverse)
+library(data.table)
+
+ancestry="data/ignore/ancestraloutliers_3sd.fid.iid"
+metadata="data/ignore/ukb2222_cal_v2_s488364_w_header_w_sqc_v2.txt"
+consent <- "data/ignore/ukb_remove_participants.id"
+
+
+withdrawn <- fread(consent) %>% rename(f.eid = V1)
+ancestry_outlier <- read_delim(ancestry,delim = " ", col_names = FALSE) %>% rename(f.eid = X1)
+genetic_qc <- fread(metadata) %>% filter(het.missing.outliers == 0) %>% 
+  rename(f.eid =1)
+
+genetic_qc %>% 
+  anti_join(., withdrawn, by = "f.eid") %>% 
+  anti_join(.,ancestry_outlier, by = "f.eid") %>% 
+  select(f.eid) %>% 
+  write_tsv(., "data/ignore/qc_cohort.tsv")
+```
